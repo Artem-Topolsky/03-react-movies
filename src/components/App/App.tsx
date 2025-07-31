@@ -1,46 +1,70 @@
-import css from "./App.module.css";
-import CafeInfo from "../CafeInfo/CafeInfo";
-import { useState } from "react";
-import VoteOptions from "../VoteOptions/VoteOptions";
-import VoteStats from "../VoteStats/VoteStats";
-import Notification from "../Notification/Notification";
-
-import type { Votes, VoteType } from "../../types/votes";
+import styles from "./App.module.css";
+import { useState, useEffect } from "react";
+import SearchBar from "../SearchBar/SearchBar";
+import toast, { Toaster } from "react-hot-toast";
+import type { Movie } from "../../types/movie";
+import { fetchMovies } from "../../services/movieService";
+import Loader from "../Loader/Loader";
+import MovieGrid from "../MovieGrid/MovieGrid";
+import ErrorMessage from "../ErrorMessage/ErrorMessage";
+import MovieModal from "../MovieModal/MovieModal";
 
 export default function App() {
-  const [votes, setVotes] = useState<Votes>({
-    good: 0,
-    neutral: 0,
-    bad: 0,
-  });
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [error, setError] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
 
-  function handleVote(type: VoteType) {
-    setVotes((prevVotes) => ({
-      ...prevVotes,
-      [type]: prevVotes[type] + 1,
-    }));
-  }
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-  function resetVotes() {
-    setVotes({
-      good: 0,
-      neutral: 0,
-      bad: 0,
-    });
-  }
+  const handleSearch = async (query: string) => {
+    setMovies([]);
+    setError(false);
+    setIsLoading(true);
 
-  const totalVotes = votes.good + votes.neutral + votes.bad;
-  const positiveRate = totalVotes > 0 ? Math.round((votes.good / totalVotes) * 100) : 0;
+    try {
+      const results = await fetchMovies(query);
 
- return (
-    <div className={css.app}>
-      <CafeInfo />
-      <VoteOptions onVote={handleVote} onReset={resetVotes} canReset={totalVotes > 0} />
+      if (results.length === 0) {
+        toast("No movies found for your request.");
+        setMovies([]);
+        return;
+      }
 
-      {totalVotes > 0 ? (
-        <VoteStats votes={votes} totalVotes={totalVotes} positiveRate={positiveRate} />
-      ) : (
-        <Notification />
+      setMovies(results);
+    } catch (err) {
+      setError(true);
+      toast.error("Something went wrong. Try again later.");
+    } finally {
+      await delay(1000);
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+  handleSearch("popular");
+}, []);
+
+  const handleSelect = (movie: Movie) => {
+    setSelectedMovie(movie);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedMovie(null);
+  };
+
+  return (
+    <div className={styles.app}>
+      <Toaster position="top-center" />
+      <SearchBar onSubmit={handleSearch} />
+
+      {isLoading && <Loader />}
+      {error && <ErrorMessage />}
+      {!isLoading && !error && (
+        <MovieGrid movies={movies} onSelect={handleSelect} />
+      )}
+      {selectedMovie && (
+        <MovieModal movie={selectedMovie} onClose={handleCloseModal} />
       )}
     </div>
   );
